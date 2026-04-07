@@ -41,6 +41,16 @@ type WhaleAgent = {
   inertia: number;
   socialAffinity: number;
   calmness: number;
+  state: 'calm' | 'active' | 'wandering' | 'drifting' | 'curious';
+  action: 'approach' | 'align' | 'circle' | 'drift_away' | 'ignore';
+  energy: number;
+  nearbyDensity: number;
+  actionClock: number;
+  actionDuration: number;
+  actionTargetId: string | null;
+  orbitDir: 1 | -1;
+  stateClock: number;
+  stateInterval: number;
   roamClock: number;
   roamInterval: number;
   roamX: number;
@@ -88,7 +98,7 @@ type PersistedWorldState = {
 const WHALE_COUNT = 6;
 const PARTICLE_COUNT = 38;
 const BGM_TRACK_WIDTH = 116;
-const WORLD_STORAGE_KEY = 'the_whales_world_v1';
+const WORLD_STORAGE_KEY = 'the_whales_world_v2';
 const PLAYER_WHALE_ID = 'player-whale';
 const CAMERA_RANGE_X = 0.28;
 const CAMERA_RANGE_Y = 0.22;
@@ -651,8 +661,8 @@ export default function App() {
         const whaleWidth = w.size * w.depthScale;
         const whaleHeight = whaleWidth * (w.species === 'longfin' ? 0.38 : 0.46);
         const rotate = w.angleAnim.interpolate({
-          inputRange: [-0.3, 0.3],
-          outputRange: ['-0.3rad', '0.3rad'],
+          inputRange: [-0.26, 0.26],
+          outputRange: ['-0.26rad', '0.26rad'],
           extrapolate: 'clamp',
         });
         const breatheScale = w.breathAnim.interpolate({
@@ -702,7 +712,6 @@ export default function App() {
                 opacity: w.opacityAnim,
                 transform: [
                   { scaleX: w.faceAnim },
-                  { scaleY: w.bellyAnim },
                   { rotateZ: bodyRoll },
                   { rotate },
                   { scale: breatheScale },
@@ -710,7 +719,6 @@ export default function App() {
               },
             ]}
           >
-            <View style={[styles.whaleAura, { backgroundColor: withAlpha(w.tint, 0.12) }]} />
             {w.isPlayer ? <View style={styles.playerWhaleAura} /> : null}
             <View style={styles.whaleShadow} />
             <Animated.View style={[styles.silhouetteShell, { transform: [{ rotate: tailRotate }] }]}>
@@ -908,53 +916,53 @@ function createWhales(width: number, height: number): WhaleAgent[] {
     const isPlayer = i === 0;
     const name = pickWhaleName(i, isPlayer);
 
-    let cruiseSpeed = randomRange(8.2, 15.5) * depthScale;
-    let tailFreq = randomRange(0.82, 1.36);
-    let tailAmp = randomRange(0.45, 0.78);
-    let bodyWaveAmp = randomRange(4.2, 10.5);
-    let bodyWaveFreq = randomRange(0.4, 0.85);
-    let thrustGain = randomRange(1.4, 3.4);
-    let steerResponsiveness = randomRange(0.72, 1.26);
-    let inertia = randomRange(1.08, 1.72);
+    let cruiseSpeed = randomRange(3.8, 7.2) * depthScale;
+    let tailFreq = randomRange(0.54, 0.92);
+    let tailAmp = randomRange(0.34, 0.58);
+    let bodyWaveAmp = randomRange(2.8, 6.4);
+    let bodyWaveFreq = randomRange(0.28, 0.58);
+    let thrustGain = randomRange(0.9, 1.7);
+    let steerResponsiveness = randomRange(0.36, 0.62);
+    let inertia = randomRange(1.8, 2.6);
     let socialAffinity = 1;
     let calmness = 0.3;
-    let roamInterval = randomRange(3.8, 7.4);
+    let roamInterval = randomRange(5.0, 10.0);
 
     if (personality === 'curious') {
-      cruiseSpeed *= randomRange(1.03, 1.12);
-      tailFreq *= randomRange(1.04, 1.12);
-      bodyWaveAmp *= randomRange(1.04, 1.14);
+      cruiseSpeed *= randomRange(1.02, 1.10);
+      tailFreq *= randomRange(1.02, 1.10);
+      bodyWaveAmp *= randomRange(1.02, 1.12);
       socialAffinity = randomRange(1.25, 1.55);
       calmness = randomRange(0.18, 0.34);
-      steerResponsiveness *= randomRange(1.05, 1.14);
-      inertia *= randomRange(0.9, 1.02);
-      roamInterval *= randomRange(0.78, 0.9);
+      steerResponsiveness *= randomRange(1.04, 1.12);
+      inertia *= randomRange(0.88, 0.98);
+      roamInterval *= randomRange(0.76, 0.88);
     } else if (personality === 'calm') {
-      cruiseSpeed *= randomRange(0.78, 0.9);
-      tailFreq *= randomRange(0.82, 0.92);
-      bodyWaveAmp *= randomRange(0.76, 0.88);
+      cruiseSpeed *= randomRange(0.72, 0.86);
+      tailFreq *= randomRange(0.74, 0.88);
+      bodyWaveAmp *= randomRange(0.68, 0.82);
       socialAffinity = randomRange(0.86, 1.05);
-      calmness = randomRange(0.7, 0.92);
-      steerResponsiveness *= randomRange(0.76, 0.88);
-      inertia *= randomRange(1.16, 1.3);
-      roamInterval *= randomRange(1.08, 1.24);
+      calmness = randomRange(0.76, 0.94);
+      steerResponsiveness *= randomRange(0.62, 0.78);
+      inertia *= randomRange(1.22, 1.42);
+      roamInterval *= randomRange(1.12, 1.32);
     } else {
       // wanderer
-      cruiseSpeed *= randomRange(0.9, 1.02);
-      tailFreq *= randomRange(0.9, 1.04);
-      bodyWaveAmp *= randomRange(0.9, 1.08);
+      cruiseSpeed *= randomRange(0.88, 1.0);
+      tailFreq *= randomRange(0.88, 1.02);
+      bodyWaveAmp *= randomRange(0.88, 1.06);
       socialAffinity = randomRange(-1.35, -0.95);
       calmness = randomRange(0.3, 0.5);
-      steerResponsiveness *= randomRange(0.9, 1.02);
-      inertia *= randomRange(1.06, 1.18);
-      roamInterval *= randomRange(0.9, 1.06);
+      steerResponsiveness *= randomRange(0.88, 1.0);
+      inertia *= randomRange(1.08, 1.22);
+      roamInterval *= randomRange(0.88, 1.04);
     }
 
     if (isPlayer) {
-      cruiseSpeed *= 0.98;
+      cruiseSpeed *= 0.96;
       socialAffinity = 1.08;
-      calmness = 0.52;
-      bodyWaveAmp *= 1.06;
+      calmness = 0.58;
+      bodyWaveAmp *= 1.04;
     }
 
     return {
@@ -992,6 +1000,16 @@ function createWhales(width: number, height: number): WhaleAgent[] {
       inertia,
       socialAffinity,
       calmness,
+      state: initialStateForPersonality(personality),
+      action: 'ignore',
+      energy: randomRange(0.5, 0.9),
+      nearbyDensity: 0,
+      actionClock: randomRange(0, 1.8),
+      actionDuration: randomRange(2.2, 4.8),
+      actionTargetId: null,
+      orbitDir: Math.random() < 0.5 ? -1 : 1,
+      stateClock: randomRange(0, 2.1),
+      stateInterval: randomRange(2.8, 5.6),
       roamClock: Math.random() * 3,
       roamInterval,
       roamX: randomRange(width * 0.08, width * 0.92),
@@ -1051,6 +1069,28 @@ function pickPersonality(): 'curious' | 'calm' | 'wanderer' {
   return 'wanderer';
 }
 
+function initialStateForPersonality(
+  personality: WhaleAgent['personality']
+): WhaleAgent['state'] {
+  if (personality === 'curious') return 'curious';
+  if (personality === 'calm') return 'calm';
+  return 'wandering';
+}
+
+function coerceState(value: unknown, fallback: WhaleAgent['state']): WhaleAgent['state'] {
+  if (value === 'calm' || value === 'active' || value === 'wandering' || value === 'drifting' || value === 'curious') {
+    return value;
+  }
+  return fallback;
+}
+
+function coerceAction(value: unknown, fallback: WhaleAgent['action']): WhaleAgent['action'] {
+  if (value === 'approach' || value === 'align' || value === 'circle' || value === 'drift_away' || value === 'ignore') {
+    return value;
+  }
+  return fallback;
+}
+
 function describePersonality(personality: WhaleAgent['personality']): string {
   if (personality === 'curious') return 'Curious';
   if (personality === 'calm') return 'Calm';
@@ -1059,7 +1099,7 @@ function describePersonality(personality: WhaleAgent['personality']): string {
 
 function describeWhaleInteraction(whale: WhaleAgent, whales: WhaleAgent[], width: number, height: number): string {
   const interactionRadius = Math.min(width, height) * 0.19;
-  const intimateRadius = interactionRadius * 0.58;
+  const intimateRadius = interactionRadius * 0.56;
   const nearby: Array<{ whale: WhaleAgent; d: number }> = [];
 
   for (const other of whales) {
@@ -1070,16 +1110,27 @@ function describeWhaleInteraction(whale: WhaleAgent, whales: WhaleAgent[], width
     if (d < interactionRadius) nearby.push({ whale: other, d });
   }
 
-  if (!nearby.length) return 'Drifting solo in the deep, with no nearby resonance.';
+  if (!nearby.length) {
+    if (whale.state === 'drifting') return 'Holding a long drift pattern in open water.';
+    if (whale.state === 'wandering') return 'Tracing a quiet roaming arc away from the group.';
+    return 'Moving alone in a low-density current.';
+  }
   nearby.sort((a, b) => a.d - b.d);
 
   const intimate = nearby.filter((n) => n.d < intimateRadius);
-  if (intimate.length >= 2) return `In close resonance with ${intimate.length} nearby whales, moving as one current.`;
-
+  if (intimate.length >= 2) {
+    if (whale.action === 'align') return `Aligned with ${intimate.length} nearby whales in a shared flow.`;
+    if (whale.action === 'circle') return `Circling softly within a cluster of ${intimate.length} whales.`;
+    return `In close resonance with ${intimate.length} nearby whales.`;
+  }
   const closest = nearby[0];
-  if (closest.d < intimateRadius) return `Sharing a low-frequency exchange with ${closest.whale.name}.`;
-  if (nearby.length >= 2) return `Aligning direction with ${nearby.length} nearby whales.`;
-  return `Slowly orienting toward ${closest.whale.name}.`;
+  if (closest.d < intimateRadius) {
+    if (whale.action === 'approach') return `Closing distance with ${closest.whale.name}.`;
+    if (whale.action === 'drift_away') return `Easing away after a brief encounter with ${closest.whale.name}.`;
+    return `Sharing a subtle exchange with ${closest.whale.name}.`;
+  }
+  if (nearby.length >= 2) return `Sensing ${nearby.length} nearby whales and adjusting heading.`;
+  return `Tracking ${closest.whale.name} at the edge of perception.`;
 }
 function stepWhalesMotion(
   whales: WhaleAgent[],
@@ -1095,10 +1146,42 @@ function stepWhalesMotion(
   const centerY = height * 0.5;
 
   for (const w of whales) {
+    const sensed = senseNearbyWhales(w, whales, width, height);
+    w.nearbyDensity = lerp(w.nearbyDensity, sensed.density, dt * 1.8);
+
+    w.stateClock += dt;
+    if (w.stateClock >= w.stateInterval) {
+      w.stateClock = 0;
+      w.stateInterval = randomRange(2.6, 5.8);
+      w.state = chooseNextState(w);
+    }
+
+    w.actionClock += dt;
+    const currentTarget =
+      (w.actionTargetId ? whales.find((other) => other.id === w.actionTargetId) : null) ??
+      sensed.neighbors[0]?.whale ??
+      null;
+    const actionExpired = w.actionClock >= w.actionDuration;
+    const actionNeedsTarget = (w.action === 'approach' || w.action === 'align' || w.action === 'circle' || w.action === 'drift_away') && !currentTarget;
+    if (actionExpired || actionNeedsTarget) {
+      const nextAction = chooseNextAction(w, sensed.neighbors);
+      w.action = nextAction.action;
+      w.actionTargetId = nextAction.targetId;
+      w.actionDuration = nextAction.duration;
+      w.actionClock = 0;
+      w.orbitDir = Math.random() < 0.5 ? -1 : 1;
+    }
+
+    const activityLoad =
+      w.state === 'active' ? 0.05 : w.state === 'curious' ? 0.036 : w.state === 'wandering' ? 0.026 : 0.014;
+    const recharge = w.state === 'calm' || w.state === 'drifting' ? 0.044 : 0.012;
+    const socialRecovery = w.nearbyDensity * (w.action === 'align' || w.action === 'approach' ? 0.03 : 0.012);
+    w.energy = clamp(w.energy + (recharge + socialRecovery - activityLoad) * dt, 0.08, 1);
+
     w.roamClock += dt;
     if (w.roamClock >= w.roamInterval) {
       w.roamClock = 0;
-      w.roamInterval = randomRange(3.8, 7.6) * (1 + w.calmness * 0.18);
+      w.roamInterval = randomRange(4.2, 8.4) * (1 + w.calmness * 0.24);
       if (w.personality === 'wanderer' || Math.random() < 0.38) {
         w.roamX = randomRange(width * 0.06, width * 0.94);
         w.roamY = randomRange(height * 0.08, height * 0.92);
@@ -1106,20 +1189,60 @@ function stepWhalesMotion(
     }
 
     const flowHeading = computeFlowHeading(w, width, height, simT);
-    const social = computeSocialSteer(w, whales, width, height);
     let desiredHeading = flowHeading;
+    let targetSpeed =
+      w.cruiseSpeed *
+      (w.state === 'active'
+        ? 0.98
+        : w.state === 'curious'
+          ? 0.9
+          : w.state === 'wandering'
+            ? 0.84
+            : w.state === 'drifting'
+              ? 0.66
+              : 0.74);
 
-    if (social.weight > 0) {
-      desiredHeading = lerpAngle(
-        desiredHeading,
-        social.heading,
-        0.28 * social.weight * (0.6 + Math.abs(w.socialAffinity) * 0.4)
-      );
+    const targetWhale = w.actionTargetId
+      ? whales.find((other) => other.id === w.actionTargetId) ?? null
+      : sensed.neighbors[0]?.whale ?? null;
+    const distanceToTarget = targetWhale
+      ? Math.sqrt((targetWhale.x - w.x) ** 2 + (targetWhale.y - w.y) ** 2)
+      : Number.POSITIVE_INFINITY;
+
+    if (targetWhale) {
+      const toTarget = Math.atan2(targetWhale.y - w.y, targetWhale.x - w.x);
+      if (w.action === 'approach') {
+        desiredHeading = lerpAngle(desiredHeading, toTarget, 0.68);
+        targetSpeed = w.cruiseSpeed * (0.86 + 0.18 * w.energy);
+      } else if (w.action === 'align') {
+        desiredHeading = lerpAngle(desiredHeading, targetWhale.heading, 0.62);
+        targetSpeed = lerp(targetSpeed, targetWhale.speed, 0.35);
+      } else if (w.action === 'circle') {
+        const desiredRadius = Math.min(width, height) * 0.1;
+        const tangent = toTarget + w.orbitDir * Math.PI * 0.5;
+        const radiusError = clamp((distanceToTarget - desiredRadius) / desiredRadius, -1, 1);
+        desiredHeading = lerpAngle(desiredHeading, tangent + radiusError * 0.36, 0.74);
+        targetSpeed = w.cruiseSpeed * (0.7 + (1 - w.calmness) * 0.08);
+      } else if (w.action === 'drift_away') {
+        const away = Math.atan2(w.y - targetWhale.y, w.x - targetWhale.x);
+        desiredHeading = lerpAngle(desiredHeading, away, 0.72);
+        targetSpeed = w.cruiseSpeed * 0.76;
+      }
     }
 
-    if (w.personality === 'wanderer') {
+    if (w.action === 'ignore') {
+      if (w.personality === 'wanderer' || w.state === 'wandering') {
+        const roamHeading = Math.atan2(w.roamY - w.y, w.roamX - w.x);
+        desiredHeading = lerpAngle(desiredHeading, roamHeading, 0.42);
+      } else if (sensed.neighbors[0]) {
+        const neighborHeading = sensed.neighbors[0].whale.heading;
+        desiredHeading = lerpAngle(desiredHeading, neighborHeading, 0.18);
+      }
+    }
+
+    if (!targetWhale && w.personality !== 'wanderer') {
       const roamHeading = Math.atan2(w.roamY - w.y, w.roamX - w.x);
-      desiredHeading = lerpAngle(desiredHeading, roamHeading, 0.18);
+      desiredHeading = lerpAngle(desiredHeading, roamHeading, 0.2);
     }
 
     const edgePressureX =
@@ -1130,59 +1253,60 @@ function stepWhalesMotion(
     if (edgePressure > 0) {
       const toCenter = Math.atan2(centerY - w.y, centerX - w.x);
       desiredHeading = lerpAngle(desiredHeading, toCenter, clamp(edgePressure * 0.9, 0, 0.96));
+      targetSpeed = Math.max(targetSpeed, w.cruiseSpeed * 0.82);
     }
 
-    w.tailPhase += dt * w.tailFreq * (0.78 + (w.speed / Math.max(w.cruiseSpeed, 0.001)) * 0.22);
+    w.tailPhase += dt * w.tailFreq * (0.58 + (w.speed / Math.max(w.cruiseSpeed, 0.001)) * 0.42);
     const tailSwing = Math.sin(w.tailPhase) * w.tailAmp;
-    const thrust = Math.abs(tailSwing) * w.thrustGain;
-    const microPulse =
-      Math.sin(simT * 0.31 + w.phase * 0.7) * 0.08 +
-      Math.sin(simT * 0.14 + w.phase * 1.9) * 0.04;
-    const targetSpeed = w.cruiseSpeed * (0.84 + microPulse);
-    w.speed += (targetSpeed + thrust - w.speed) * dt * (0.52 + (1 - w.calmness) * 0.26);
-    w.speed = clamp(w.speed, w.cruiseSpeed * 0.48, w.cruiseSpeed * 1.16);
+    const thrust = (0.35 + Math.abs(tailSwing) * 0.65) * w.thrustGain * 0.26;
+    const microPulse = Math.sin(simT * 0.24 + w.phase * 0.8) * 0.05 + Math.sin(simT * 0.11 + w.phase * 1.7) * 0.03;
+    const speedGoal = targetSpeed * (0.92 + microPulse);
+    w.speed += (speedGoal + thrust - w.speed) * dt * (0.34 + (1 - w.calmness) * 0.14);
+    w.speed = clamp(w.speed, w.cruiseSpeed * 0.4, w.cruiseSpeed * 1.08);
 
     const headingError = angleDelta(w.heading, desiredHeading);
-    const turnAccel = headingError * w.steerResponsiveness - w.turnRate * w.inertia;
+    const turnAccel = headingError * w.steerResponsiveness - w.turnRate * (1.08 + w.inertia * 0.48);
     w.turnRate += turnAccel * dt;
-    w.turnRate = clamp(w.turnRate, -0.74, 0.74);
+    w.turnRate = clamp(w.turnRate, -0.28, 0.28);
     w.heading += w.turnRate * dt;
 
-    // Lateral spine wave: whale body undulates while moving forward.
     const lateralWave = Math.sin(w.tailPhase * 0.56 + simT * w.bodyWaveFreq + w.phase) * w.bodyWaveAmp;
-    const fwdX = Math.cos(w.heading);
-    const fwdY = Math.sin(w.heading);
+    const curvatureBias = Math.sin(simT * 0.12 + w.phase * 0.9) * 0.08;
+    const fwdHeading = w.heading + curvatureBias;
+    const fwdX = Math.cos(fwdHeading);
+    const fwdY = Math.sin(fwdHeading);
     const sideX = -fwdY;
     const sideY = fwdX;
-    w.x += fwdX * w.speed * dt + sideX * lateralWave * dt * 0.42;
-    w.y += fwdY * w.speed * dt + sideY * lateralWave * dt * 0.42;
+    w.x += fwdX * w.speed * dt + sideX * lateralWave * dt * 0.28;
+    w.y += fwdY * w.speed * dt + sideY * lateralWave * dt * 0.28;
     w.x = clamp(w.x, 20, width - 20);
     w.y = clamp(w.y, 18, height - 18);
 
     w.bellyCooldown -= dt;
-    if (!w.bellyUp && w.bellyCooldown <= 0 && Math.random() < dt * 0.007) {
+    const playfulRollChance = w.state === 'active' ? 0.00055 : 0.00022;
+    if (!w.bellyUp && w.bellyCooldown <= 0 && Math.random() < dt * playfulRollChance) {
       w.bellyUp = true;
       w.bellyClock = 0;
-      w.bellyDuration = randomRange(1.8, 3.6);
+      w.bellyDuration = randomRange(0.8, 1.4);
     }
     if (w.bellyUp) {
       w.bellyClock += dt;
       if (w.bellyClock >= w.bellyDuration) {
         w.bellyUp = false;
         w.bellyClock = 0;
-        w.bellyCooldown = randomRange(26, 55);
+        w.bellyCooldown = randomRange(90, 220);
       }
     }
     const bellyTarget = w.bellyUp ? -1 : 1;
-    w.bellyFlip = lerp(w.bellyFlip, bellyTarget, dt * (w.bellyUp ? 0.9 : 0.6));
+    w.bellyFlip = lerp(w.bellyFlip, bellyTarget, dt * (w.bellyUp ? 0.74 : 0.44));
     w.faceDir = Math.cos(w.heading) >= 0 ? 1 : -1;
-    const desiredBank = clamp(Math.sin(w.heading) * 0.22 + w.turnRate * 0.18, -0.26, 0.26);
-    w.displayBank = lerp(w.displayBank, desiredBank, dt * 1.9);
+    const desiredBank = clamp(w.turnRate * 0.56 + tailSwing * 0.04, -0.2, 0.2);
+    w.displayBank = lerp(w.displayBank, desiredBank, dt * 1.7);
 
     if (updateAnims) {
-      const breathe = 0.5 + 0.5 * Math.sin(simT * 0.52 + w.phase * 1.4);
-      const bob = Math.sin(w.tailPhase * 0.46 + w.phase * 0.9) * 0.95;
-      const opacityPulse = 0.5 + 0.5 * Math.sin(simT * 0.35 + w.phase * 0.7);
+      const breathe = 0.5 + 0.5 * Math.sin(simT * (0.24 + w.energy * 0.14) + w.phase * 1.25);
+      const bob = Math.sin(w.tailPhase * 0.42 + w.phase * 0.9) * (0.68 + w.tailAmp * 0.38);
+      const opacityPulse = 0.5 + 0.5 * Math.sin(simT * 0.24 + w.phase * 0.66);
       w.xAnim.setValue(w.x);
       w.yAnim.setValue(w.y);
       w.angleAnim.setValue(w.displayBank);
@@ -1191,9 +1315,169 @@ function stepWhalesMotion(
       w.breathAnim.setValue(breathe);
       w.tailAnim.setValue(tailSwing);
       w.bobAnim.setValue(bob);
-      w.opacityAnim.setValue(w.depthOpacity * (0.84 + opacityPulse * 0.2));
+      w.opacityAnim.setValue(w.depthOpacity * (0.82 + opacityPulse * 0.2));
     }
   }
+}
+
+function senseNearbyWhales(
+  whale: WhaleAgent,
+  whales: WhaleAgent[],
+  width: number,
+  height: number
+): {
+  neighbors: Array<{ whale: WhaleAgent; distance: number }>;
+  density: number;
+} {
+  const radius = Math.min(width, height) * 0.28;
+  const neighbors: Array<{ whale: WhaleAgent; distance: number }> = [];
+  let density = 0;
+
+  for (const other of whales) {
+    if (other.id === whale.id) continue;
+    const dx = other.x - whale.x;
+    const dy = other.y - whale.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    if (d <= 1 || d > radius) continue;
+    neighbors.push({ whale: other, distance: d });
+    density += 1 - d / radius;
+  }
+
+  neighbors.sort((a, b) => a.distance - b.distance);
+  return {
+    neighbors,
+    density: clamp(density / 3.2, 0, 1),
+  };
+}
+
+function chooseNextState(whale: WhaleAgent): WhaleAgent['state'] {
+  const weights: Record<WhaleAgent['state'], number> = {
+    calm: 0.18,
+    active: 0.16,
+    wandering: 0.2,
+    drifting: 0.2,
+    curious: 0.18,
+  };
+
+  if (whale.energy < 0.34) {
+    weights.calm += 0.44;
+    weights.drifting += 0.36;
+    weights.active *= 0.48;
+  } else if (whale.energy > 0.72) {
+    weights.active += 0.34;
+    weights.curious += 0.26;
+  }
+
+  if (whale.nearbyDensity > 0.58) {
+    weights.curious += 0.34;
+    weights.active += 0.2;
+    weights.wandering *= 0.72;
+  } else if (whale.nearbyDensity < 0.22) {
+    weights.wandering += 0.28;
+    weights.drifting += 0.2;
+  }
+
+  if (whale.personality === 'curious') {
+    weights.curious += 0.34;
+    weights.active += 0.12;
+  } else if (whale.personality === 'calm') {
+    weights.calm += 0.34;
+    weights.drifting += 0.22;
+  } else {
+    weights.wandering += 0.38;
+    weights.drifting += 0.12;
+  }
+
+  return weightedChoice(weights, whale.state);
+}
+
+function chooseNextAction(
+  whale: WhaleAgent,
+  neighbors: Array<{ whale: WhaleAgent; distance: number }>
+): { action: WhaleAgent['action']; targetId: string | null; duration: number } {
+  const closest = neighbors[0]?.whale ?? null;
+  const weights: Record<WhaleAgent['action'], number> = {
+    approach: 0.15,
+    align: 0.18,
+    circle: 0.12,
+    drift_away: 0.15,
+    ignore: 0.2,
+  };
+
+  if (!closest) {
+    weights.ignore += 0.56;
+    weights.drift_away += 0.22;
+    weights.approach *= 0.08;
+    weights.align *= 0.12;
+    weights.circle *= 0.1;
+  } else {
+    const closeness = clamp(1 - neighbors[0].distance / 180, 0, 1);
+    weights.approach += closeness * (0.36 + Math.max(whale.socialAffinity, 0) * 0.26);
+    weights.align += closeness * 0.42;
+    weights.circle += closeness * 0.24;
+    weights.drift_away += Math.max(-whale.socialAffinity, 0) * 0.44;
+  }
+
+  if (whale.state === 'curious') {
+    weights.approach += 0.3;
+    weights.circle += 0.18;
+  } else if (whale.state === 'active') {
+    weights.approach += 0.22;
+    weights.align += 0.2;
+  } else if (whale.state === 'drifting') {
+    weights.drift_away += 0.28;
+    weights.ignore += 0.24;
+  } else if (whale.state === 'wandering') {
+    weights.ignore += 0.26;
+    weights.drift_away += 0.2;
+  } else if (whale.state === 'calm') {
+    weights.align += 0.2;
+    weights.ignore += 0.24;
+  }
+
+  if (whale.personality === 'wanderer') {
+    weights.drift_away += 0.28;
+    weights.approach *= 0.72;
+    weights.circle *= 0.78;
+  } else if (whale.personality === 'calm') {
+    weights.ignore += 0.18;
+    weights.align += 0.18;
+  } else {
+    weights.approach += 0.18;
+  }
+
+  if (whale.energy < 0.28) {
+    weights.ignore += 0.44;
+    weights.drift_away += 0.24;
+    weights.approach *= 0.68;
+  }
+
+  const action = weightedChoice<WhaleAgent['action']>(weights, 'ignore');
+  const targetId =
+    action === 'approach' || action === 'align' || action === 'circle' || action === 'drift_away'
+      ? closest?.id ?? null
+      : null;
+  const durationBase =
+    action === 'circle' ? randomRange(2.4, 4.6) : action === 'align' ? randomRange(2.2, 4.1) : randomRange(1.8, 3.8);
+  const duration = durationBase * (1 + whale.calmness * 0.4);
+
+  return { action, targetId, duration };
+}
+
+function weightedChoice<T extends string>(weights: Record<T, number>, fallback: T): T {
+  let total = 0;
+  const entries = Object.entries(weights) as Array<[T, number]>;
+  for (const [, weight] of entries) {
+    total += Math.max(weight, 0);
+  }
+  if (total <= 0.00001) return fallback;
+
+  let cursor = Math.random() * total;
+  for (const [key, weight] of entries) {
+    cursor -= Math.max(weight, 0);
+    if (cursor <= 0) return key;
+  }
+  return fallback;
 }
 
 function computeFlowHeading(whale: WhaleAgent, width: number, height: number, simT: number): number {
@@ -1338,6 +1622,16 @@ function serializeWhale(whale: WhaleAgent): PersistedWhaleState {
     inertia: whale.inertia,
     socialAffinity: whale.socialAffinity,
     calmness: whale.calmness,
+    state: whale.state,
+    action: whale.action,
+    energy: whale.energy,
+    nearbyDensity: whale.nearbyDensity,
+    actionClock: whale.actionClock,
+    actionDuration: whale.actionDuration,
+    actionTargetId: whale.actionTargetId,
+    orbitDir: whale.orbitDir,
+    stateClock: whale.stateClock,
+    stateInterval: whale.stateInterval,
     roamClock: whale.roamClock,
     roamInterval: whale.roamInterval,
     roamX: whale.roamX,
@@ -1352,7 +1646,7 @@ function hydrateWhales(states: PersistedWhaleState[], width: number, height: num
     const x = clamp(anyState.x ?? randomRange(width * 0.18, width * 0.82), 24, width - 24);
     const y = clamp(anyState.y ?? randomRange(height * 0.2, height * 0.8), 22, height - 22);
     const heading = anyState.heading ?? randomRange(-Math.PI, Math.PI);
-    const cruiseSpeed = anyState.cruiseSpeed ?? anyState.baseSpeed ?? randomRange(16, 30) * (anyState.depthScale ?? 1);
+    const cruiseSpeed = anyState.cruiseSpeed ?? anyState.baseSpeed ?? randomRange(3.8, 7.4) * (anyState.depthScale ?? 1);
     return {
       id: isPlayer ? PLAYER_WHALE_ID : s.id,
       name: anyState.name || pickWhaleName(idx, isPlayer),
@@ -1379,15 +1673,25 @@ function hydrateWhales(states: PersistedWhaleState[], width: number, height: num
       bellyCooldown: anyState.bellyCooldown ?? randomRange(14, 28),
       phase: anyState.phase ?? Math.random() * Math.PI * 2,
       tailPhase: anyState.tailPhase ?? Math.random() * Math.PI * 2,
-      tailFreq: anyState.tailFreq ?? randomRange(1.15, 1.9),
-      tailAmp: anyState.tailAmp ?? randomRange(0.7, 1.05),
-      bodyWaveAmp: anyState.bodyWaveAmp ?? randomRange(8, 18),
-      bodyWaveFreq: anyState.bodyWaveFreq ?? randomRange(0.4, 0.85),
-      thrustGain: anyState.thrustGain ?? randomRange(3.6, 8.2),
-      steerResponsiveness: anyState.steerResponsiveness ?? randomRange(1.25, 2.05),
-      inertia: anyState.inertia ?? randomRange(0.95, 1.55),
+      tailFreq: anyState.tailFreq ?? randomRange(0.54, 0.94),
+      tailAmp: anyState.tailAmp ?? randomRange(0.34, 0.6),
+      bodyWaveAmp: anyState.bodyWaveAmp ?? randomRange(2.8, 6.8),
+      bodyWaveFreq: anyState.bodyWaveFreq ?? randomRange(0.28, 0.62),
+      thrustGain: anyState.thrustGain ?? randomRange(0.9, 1.8),
+      steerResponsiveness: anyState.steerResponsiveness ?? randomRange(0.36, 0.68),
+      inertia: anyState.inertia ?? randomRange(1.8, 2.6),
       socialAffinity: anyState.socialAffinity ?? 1,
       calmness: anyState.calmness ?? 0.4,
+      state: coerceState(anyState.state, initialStateForPersonality(anyState.personality || pickPersonality())),
+      action: coerceAction(anyState.action, 'ignore'),
+      energy: clamp(anyState.energy ?? randomRange(0.45, 0.88), 0.08, 1),
+      nearbyDensity: clamp(anyState.nearbyDensity ?? 0, 0, 1),
+      actionClock: anyState.actionClock ?? 0,
+      actionDuration: anyState.actionDuration ?? randomRange(2, 4.4),
+      actionTargetId: typeof anyState.actionTargetId === 'string' ? anyState.actionTargetId : null,
+      orbitDir: anyState.orbitDir === -1 ? -1 : 1,
+      stateClock: anyState.stateClock ?? 0,
+      stateInterval: anyState.stateInterval ?? randomRange(2.6, 5.6),
       roamClock: anyState.roamClock ?? 0,
       roamInterval: anyState.roamInterval ?? randomRange(3.8, 7.4),
       roamX: anyState.roamX ?? randomRange(width * 0.08, width * 0.92),
@@ -1696,10 +2000,7 @@ const styles = StyleSheet.create({
     left: '-19%',
     top: '-38%',
     borderRadius: 999,
-    backgroundColor: 'rgba(172,232,255,0.08)',
-    shadowColor: '#BEEBFF',
-    shadowOffset: { width: 0, height: 0 },
-    shadowRadius: 22,
+    backgroundColor: 'rgba(172,232,255,0.06)',
   },
   whaleShadow: {
     position: 'absolute',
@@ -2161,5 +2462,3 @@ const styles = StyleSheet.create({
     textShadowOffset: { width: 0, height: 0 },
   },
 });
-
-
